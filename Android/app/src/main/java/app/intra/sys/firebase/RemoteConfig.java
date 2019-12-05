@@ -16,6 +16,7 @@ limitations under the License.
 package app.intra.sys.firebase;
 
 import android.os.Build;
+import android.os.Build.VERSION;
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
@@ -37,15 +38,39 @@ public class RemoteConfig {
   }
 
   public static boolean getUseGoDoh() {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-      // Must be kept in sync with the check in IntraVpnService.makeVpnAdapter.
-      // GoVpnAdapter isn't used on versions below M, so Go-DOH shouldn't be used for other purposes
-      // (especially probes) on those versions either.
+    if (getUseSplitMode()) {
+      // Split mode doesn't use Go-DOH, so Go-DOH shouldn't be used for other purposes
+      // (especially probes) in split mode, for consistency.
       return false;
     }
     try {
       return !FirebaseRemoteConfig.getInstance()
           .getBoolean("disable_go_doh");
+    } catch (IllegalStateException e) {
+      LogWrapper.logException(e);
+      return true;
+    }
+  }
+
+  public static boolean getUseSplitMode() {
+    // On M and later, Chrome uses getActiveNetwork() to determine which DNS servers to use.
+    // A full tunnel configuration makes this VPN the active network, whereas a
+    // split-tunnel configuration does not.  Therefore, on M and later, we cannot use
+    // split mode.  Additionally, M and later also exhibit DownloadManager bugs when used
+    // with a split-tunnel VPN.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M || true) {
+      return false;
+    }
+
+    try {
+      // go_min_version is the minimum Android version that should use the GoVpnAdapter (i.e. the
+      // full tunnel configuration).
+      long minVersion = FirebaseRemoteConfig.getInstance().getLong("go_min_version");
+      if (minVersion == FirebaseRemoteConfig.DEFAULT_VALUE_FOR_LONG) {
+        // The split mode remote configuration is not present.  Use split mode.
+        return true;
+      }
+      return VERSION.SDK_INT < minVersion;
     } catch (IllegalStateException e) {
       LogWrapper.logException(e);
       return true;

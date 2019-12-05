@@ -47,11 +47,13 @@ import app.intra.net.split.SplitVpnAdapter;
 import app.intra.sys.firebase.AnalyticsWrapper;
 import app.intra.sys.NetworkManager.NetworkListener;
 import app.intra.sys.firebase.LogWrapper;
+import app.intra.sys.firebase.RemoteConfig;
 import app.intra.ui.MainActivity;
 import java.util.Calendar;
+import protect.Protector;
 
 public class IntraVpnService extends VpnService implements NetworkListener,
-    SharedPreferences.OnSharedPreferenceChangeListener {
+    SharedPreferences.OnSharedPreferenceChangeListener, Protector {
 
   private static final String LOG_TAG = "IntraVpnService";
   private static final int SERVICE_ID = 1; // Only has to be unique within this app.
@@ -124,7 +126,6 @@ public class IntraVpnService extends VpnService implements NetworkListener,
     // Registers this class as a listener for user preference changes.
     PreferenceManager.getDefaultSharedPreferences(this).
         registerOnSharedPreferenceChangeListener(this);
-
 
     if (networkManager != null) {
       spawnServerUpdate();
@@ -363,21 +364,10 @@ public class IntraVpnService extends VpnService implements NetworkListener,
   }
 
   private VpnAdapter makeVpnAdapter() {
-    // On M and later, Chrome uses getActiveNetwork() to determine which DNS servers to use.
-    // GoVpnAdapter makes this VPN the active network, whereas SplitVpnAdapter (which uses a
-    // split-tunnel configuration) does not.  Therefore, on M and later, we have to use
-    // GoVpnAdapter.  Additionally, M and later also exhibit DownloadManager bugs when used
-    // with a split-tunnel VPN.
-    // TODO: Use GoVpnAdapter on older versions once we have a way to "protect" (i.e. exclude
-    //   from the VPN) the DOH sockets.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      return GoVpnAdapter.establish(this);
+    if (RemoteConfig.getUseSplitMode()) {
+      return SplitVpnAdapter.establish(this);
     }
-    // Pre-M we prefer SplitVpnAdapter, which uses much less CPU and RAM (important for older
-    // devices).  This is also necessary because SocksVpnAdapter relies on VpnService.Builder
-    // .addDisallowedApplication(this) to bypass its own VPN, and this method is only available in
-    // Lollipop and later.
-    return SplitVpnAdapter.establish(this);
+    return GoVpnAdapter.establish(this);
   }
 
   private synchronized void startVpnAdapter() {

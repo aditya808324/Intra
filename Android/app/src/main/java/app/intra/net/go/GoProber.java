@@ -16,8 +16,11 @@ limitations under the License.
 package app.intra.net.go;
 
 import android.content.Context;
+import androidx.annotation.Nullable;
 import app.intra.net.doh.Prober;
 import app.intra.net.doh.ServerConnectionFactory;
+import app.intra.sys.IntraVpnService;
+import app.intra.sys.VpnController;
 import doh.Transport;
 import tun2socks.Tun2socks;
 
@@ -37,7 +40,8 @@ public class GoProber extends Prober {
     new Thread(() -> {
       String dohIPs = ServerConnectionFactory.getIpString(context, url);
       try {
-        Transport transport = Tun2socks.newDoHTransport(url, dohIPs, null);
+        @Nullable IntraVpnService vpnService = VpnController.getInstance().getIntraVpnService();
+        Transport transport = Tun2socks.newDoHTransport(url, dohIPs, vpnService, null);
         if (transport == null) {
           callback.onCompleted(false);
           return;
